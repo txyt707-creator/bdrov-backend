@@ -35,7 +35,8 @@ if ($action === 'config') {
         ]
     ];
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode($configData);
+    // أضفنا JSON_UNESCAPED_UNICODE لكي تظهر النصوص العربية بشكل صحيح بدون ترميز \u0642
+    echo json_encode($configData, JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -45,7 +46,7 @@ if ($action === 'config') {
 if ($action === 'admin_get_data') {
     if ($secret !== 'BDrAdmin123Secure') {
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(["status" => "error", "message" => "Unauthorized"]);
+        echo json_encode(["status" => "error", "message" => "Unauthorized"], JSON_UNESCAPED_UNICODE);
         exit;
     }
     
@@ -61,7 +62,7 @@ if ($action === 'admin_get_data') {
     }
     
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode($response);
+    echo json_encode($response, JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -71,7 +72,7 @@ if ($action === 'admin_get_data') {
 if ($action === 'admin_generate') {
     if ($secret !== 'BDrAdmin123Secure') {
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(["status" => "error", "message" => "Unauthorized"]);
+        echo json_encode(["status" => "error", "message" => "Unauthorized"], JSON_UNESCAPED_UNICODE);
         exit;
     }
     
@@ -90,10 +91,10 @@ if ($action === 'admin_generate') {
         "last_seen" => 0
     ];
     
-    file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
+    file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(["status" => "success", "key" => $newKey]);
+    echo json_encode(["status" => "success", "key" => $newKey], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -103,21 +104,21 @@ if ($action === 'admin_generate') {
 if ($action === 'admin_delete') {
     if ($secret !== 'BDrAdmin123Secure') {
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(["status" => "error", "message" => "Unauthorized"]);
+        echo json_encode(["status" => "error", "message" => "Unauthorized"], JSON_UNESCAPED_UNICODE);
         exit;
     }
     
     if (!empty($targetKey) && isset($licenses[$targetKey])) {
         unset($licenses[$targetKey]);
-        file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
+        file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
         
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(["status" => "success"]);
+        echo json_encode(["status" => "success"], JSON_UNESCAPED_UNICODE);
         exit;
     }
     
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(["status" => "error", "message" => "Key not found"]);
+    echo json_encode(["status" => "error", "message" => "Key not found"], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -127,30 +128,29 @@ if ($action === 'admin_delete') {
 if ($action === 'check') {
     if (empty($hwid)) {
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(["status" => "error", "message" => "Invalid HWID"]);
+        echo json_encode(["status" => "error", "message" => "Invalid HWID"], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
     foreach ($licenses as $k => $data) {
         if (isset($data['hwid']) && $data['hwid'] === $hwid) {
             if (time() < $data['expiry']) {
-                // تحديث وقت الاتصال عند التحقق
                 $licenses[$k]['last_seen'] = time();
-                file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
+                file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
                 header('Content-Type: application/json; charset=utf-8');
                 echo json_encode([
                     "status" => "success",
                     "name" => $data['name'],
                     "expiry" => $data['expiry']
-                ]);
+                ], JSON_UNESCAPED_UNICODE);
                 exit;
             }
         }
     }
 
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(["status" => "failed", "message" => "License not found or expired"]);
+    echo json_encode(["status" => "failed", "message" => "License not found or expired"], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -160,14 +160,14 @@ if ($action === 'check') {
 if ($action === 'activate') {
     if (empty($hwid) || empty($key) || empty($name)) {
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(["status" => "error", "message" => "Missing parameters"]);
+        echo json_encode(["status" => "error", "message" => "Missing parameters"], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
     if (isset($licenses[$key])) {
         if (isset($licenses[$key]['used']) && $licenses[$key]['used'] === true) {
             header('Content-Type: application/json; charset=utf-8');
-            echo json_encode(["status" => "error", "message" => "Key already used"]);
+            echo json_encode(["status" => "error", "message" => "Key already used"], JSON_UNESCAPED_UNICODE);
             exit;
         }
 
@@ -180,40 +180,40 @@ if ($action === 'activate') {
         $licenses[$key]['used'] = true;
         $licenses[$key]['last_seen'] = time();
 
-        file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
+        file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
             "status" => "success",
             "name" => $name,
             "expiry" => $expiryTime
-        ]);
+        ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(["status" => "error", "message" => "Invalid license key"]);
+    echo json_encode(["status" => "error", "message" => "Invalid license key"], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
 // ==========================================
-// 7. نبضات اتصال العميل (Heartbeat لتحديد متصل/مغلق)
+// 7. نبضات اتصال العميل (Heartbeat)
 // ==========================================
 if ($action === 'heartbeat') {
     if (!empty($hwid)) {
         foreach ($licenses as $k => $data) {
             if (isset($data['hwid']) && $data['hwid'] === $hwid) {
                 $licenses[$k]['last_seen'] = time();
-                file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
-                echo json_encode(["status" => "success"]);
+                file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+                echo json_encode(["status" => "success"], JSON_UNESCAPED_UNICODE);
                 exit;
             }
         }
     }
-    echo json_encode(["status" => "error"]);
+    echo json_encode(["status" => "error"], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
 header('Content-Type: application/json; charset=utf-8');
-echo json_encode(["status" => "error", "message" => "Invalid action"]);
+echo json_encode(["status" => "error", "message" => "Invalid action"], JSON_UNESCAPED_UNICODE);
 ?>
