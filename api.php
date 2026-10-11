@@ -64,15 +64,21 @@ if ($action === 'generate') {
 }
 
 // ==========================================
-// 3. نظام عرض قائمة الأكواد (مصفوفة JSON مرتبة)
+// 3. نظام عرض قائمة الأكواد (نص منظم ومضمون 100%)
 // ==========================================
 if ($action === 'list') {
-    header('Content-Type: application/json; charset=utf-8');
-    // استخدام array_values لضمان خروج البيانات بصيغة مصفوفة متسلسلة تقرأها الأدمن بسهولة
-    echo json_encode([
-        "status" => "success",
-        "licenses" => array_values($licenses)
-    ]);
+    $output = "STATUS:SUCCESS\n";
+    foreach ($licenses as $k => $data) {
+        $kKey = isset($data['key']) ? $data['key'] : $k;
+        $kDays = isset($data['days']) ? $data['days'] : 30;
+        $kStatus = isset($data['status']) ? $data['status'] : 'available';
+        $kName = isset($data['name']) ? $data['name'] : '-';
+        $kCreated = isset($data['created_at']) ? $data['created_at'] : '-';
+        
+        $output .= "$kKey|$kDays|$kStatus|$kName|$kCreated\n";
+    }
+    header('Content-Type: text/plain; charset=utf-8');
+    echo $output;
     exit;
 }
 
