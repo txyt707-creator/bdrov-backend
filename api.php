@@ -55,7 +55,8 @@ if ($action === 'admin_get_data') {
             "days" => isset($data['days']) ? intval($data['days']) : 30,
             "used" => isset($data['used']) ? boolval($data['used']) : false,
             "name" => isset($data['name']) ? $data['name'] : "-",
-            "created_at" => isset($data['created_at']) ? $data['created_at'] : "-"
+            "created_at" => isset($data['created_at']) ? $data['created_at'] : "-",
+            "last_seen" => isset($data['last_seen']) ? intval($data['last_seen']) : 0
         ];
     }
     
@@ -85,7 +86,8 @@ if ($action === 'admin_generate') {
         "name" => "-",
         "hwid" => "",
         "expiry" => 0,
-        "created_at" => date('Y-m-d H:i:s')
+        "created_at" => date('Y-m-d H:i:s'),
+        "last_seen" => 0
     ];
     
     file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
@@ -132,6 +134,10 @@ if ($action === 'check') {
     foreach ($licenses as $k => $data) {
         if (isset($data['hwid']) && $data['hwid'] === $hwid) {
             if (time() < $data['expiry']) {
+                // تحديث وقت الاتصال عند التحقق
+                $licenses[$k]['last_seen'] = time();
+                file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
+
                 header('Content-Type: application/json; charset=utf-8');
                 echo json_encode([
                     "status" => "success",
@@ -169,9 +175,10 @@ if ($action === 'activate') {
         $expiryTime = time() + ($days * 86400);
 
         $licenses[$key]['name'] = $name;
-        $licenses[$key]['hwid'] = $hwid; // حفظ بصمة الجهاز هنا بسلام
+        $licenses[$key]['hwid'] = $hwid;
         $licenses[$key]['expiry'] = $expiryTime;
         $licenses[$key]['used'] = true;
+        $licenses[$key]['last_seen'] = time();
 
         file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
 
@@ -186,6 +193,24 @@ if ($action === 'activate') {
 
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(["status" => "error", "message" => "Invalid license key"]);
+    exit;
+}
+
+// ==========================================
+// 7. نبضات اتصال العميل (Heartbeat لتحديد متصل/مغلق)
+// ==========================================
+if ($action === 'heartbeat') {
+    if (!empty($hwid)) {
+        foreach ($licenses as $k => $data) {
+            if (isset($data['hwid']) && $data['hwid'] === $hwid) {
+                $licenses[$k]['last_seen'] = time();
+                file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
+                echo json_encode(["status" => "success"]);
+                exit;
+            }
+        }
+    }
+    echo json_encode(["status" => "error"]);
     exit;
 }
 
