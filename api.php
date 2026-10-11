@@ -5,9 +5,13 @@ $key = isset($_GET['key']) ? trim($_GET['key']) : '';
 $name = isset($_GET['name']) ? trim($_GET['name']) : '';
 
 $dbFile = 'licenses.json';
-$licenses = file_exists($dbFile) ? json_decode(file_get_contents($dbFile), true) : [];
-if (!is_array($licenses)) {
-    $licenses = [];
+$licenses = [];
+if (file_exists($dbFile)) {
+    $jsonContent = file_get_contents($dbFile);
+    $decoded = json_decode($jsonContent, true);
+    if (is_array($decoded)) {
+        $licenses = $decoded;
+    }
 }
 
 // ==========================================
@@ -64,21 +68,21 @@ if ($action === 'generate') {
 }
 
 // ==========================================
-// 3. نظام عرض قائمة الأكواد (JSON موحد ومضمون)
+// 3. نظام عرض قائمة الأكواد (نص منظم ومضمون 100%)
 // ==========================================
 if ($action === 'list') {
-    $listArray = [];
+    $output = "STATUS:SUCCESS\n";
     foreach ($licenses as $k => $data) {
-        $listArray[] = [
-            "key" => isset($data['key']) ? $data['key'] : $k,
-            "days" => isset($data['days']) ? $data['days'] : 30,
-            "status" => isset($data['status']) ? $data['status'] : 'available',
-            "name" => isset($data['name']) ? $data['name'] : '-',
-            "created_at" => isset($data['created_at']) ? $data['created_at'] : '-'
-        ];
+        $kKey = isset($data['key']) ? $data['key'] : $k;
+        $kDays = isset($data['days']) ? $data['days'] : 30;
+        $kStatus = isset($data['status']) ? $data['status'] : 'available';
+        $kName = isset($data['name']) ? $data['name'] : '-';
+        $kCreated = isset($data['created_at']) ? $data['created_at'] : '-';
+        
+        $output .= "$kKey|$kDays|$kStatus|$kName|$kCreated\n";
     }
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(["status" => "success", "licenses" => $listArray]);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo $output;
     exit;
 }
 
