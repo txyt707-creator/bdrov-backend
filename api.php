@@ -61,21 +61,21 @@ if ($action === 'generate') {
 }
 
 // ==========================================
-// 3. نظام عرض قائمة الأكواد مرتبة (للوحة التحكم)
+// 3. نظام عرض قائمة الأكواد (مبسط وسريع للأدمن)
 // ==========================================
 if ($action === 'list') {
-    $formattedLicenses = [];
+    $output = "status:success\n";
     foreach ($licenses as $k => $data) {
-        $formattedLicenses[] = [
-            "key" => isset($data['key']) ? $data['key'] : $k,
-            "days" => isset($data['days']) ? $data['days'] : 30,
-            "status" => isset($data['status']) ? $data['status'] : 'available',
-            "name" => isset($data['name']) ? $data['name'] : '-',
-            "created_at" => isset($data['created_at']) ? $data['created_at'] : '-'
-        ];
+        $kKey = isset($data['key']) ? $data['key'] : $k;
+        $kDays = isset($data['days']) ? $data['days'] : 30;
+        $kStatus = isset($data['status']) ? $data['status'] : 'available';
+        $kName = isset($data['name']) ? $data['name'] : '-';
+        $kCreated = isset($data['created_at']) ? $data['created_at'] : '-';
+        
+        $output .= "$kKey|$kDays|$kStatus|$kName|$kCreated\n";
     }
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(["status" => "success", "licenses" => $formattedLicenses]);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo $output;
     exit;
 }
 
