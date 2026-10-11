@@ -20,8 +20,8 @@ if ($action === 'config') {
         "default_horz" => -39,
         "features" => [
             "combo" => [
-                "enabled" => false,        // اجعلها true لتفعيل الميزة، أو false لإلغائها وإظهار رسالة "قريباً !"
-                "message" => "قريباً !"     // النص الذي سيظهر تلقائياً للمشتركين عند التعطيل
+                "enabled" => false,
+                "message" => "قريباً !"
             ],
             "ultra_sticky" => [
                 "enabled" => true,
@@ -61,11 +61,21 @@ if ($action === 'generate') {
 }
 
 // ==========================================
-// 3. نظام عرض قائمة الأكواد (للوحة التحكم)
+// 3. نظام عرض قائمة الأكواد مرتبة (للوحة التحكم)
 // ==========================================
 if ($action === 'list') {
+    $formattedLicenses = [];
+    foreach ($licenses as $k => $data) {
+        $formattedLicenses[] = [
+            "key" => isset($data['key']) ? $data['key'] : $k,
+            "days" => isset($data['days']) ? $data['days'] : 30,
+            "status" => isset($data['status']) ? $data['status'] : 'available',
+            "name" => isset($data['name']) ? $data['name'] : '-',
+            "created_at" => isset($data['created_at']) ? $data['created_at'] : '-'
+        ];
+    }
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(["status" => "success", "licenses" => $licenses]);
+    echo json_encode(["status" => "success", "licenses" => $formattedLicenses]);
     exit;
 }
 
