@@ -7,72 +7,105 @@ $keysFile = 'generated_keys.json';
 $licenses = file_exists($dbFile) ? json_decode(file_get_contents($dbFile), true) : [];
 $genKeys = file_exists($keysFile) ? json_decode(file_get_contents($keysFile), true) : [];
 
-$action = $_GET['action'] ?? 'check';
+$action = $_GET['action'] ?? '';
 $hwid = $_GET['hwid'] ?? '';
 $key = $_GET['key'] ?? '';
+$admin_secret = $_GET['secret'] ?? '';
 
-if (empty($hwid)) {
-    echo json_encode(["status" => "error", "message" => "HWID is missing"]);
+// مفتاح حماية سري بسيط بين أداة الـ Admin والـ Server (غيره لأي كلمة سر قوية)
+$secretKey = "BDrAdmin123Secure";
+
+// 1. التحقق للعميل العادي
+if ($action === 'check') {
+    if (empty($hwid) || !isset($licenses[$hwid])) {
+        echo json_encode(["status" => "unregistered"]);
+        exit;
+    }
+    if ($licenses[$hwid]['banned'] ?? false) {
+        echo json_encode(["status" => "banned", "message" => "Device is banned"]);
+        exit;
+    }
+    if (time() > $licenses[$hwid]['expiry']) {
+        echo json_encode(["status" => "expired"]);
+        exit;
+    }
+    echo json_encode(["status" => "success", "expiry" => $licenses[$hwid]['expiry']]);
     exit;
 }
 
+// 2. تفعيل كود للعميل
 if ($action === 'activate') {
-    if (empty($key)) {
-        echo json_encode(["status" => "error", "message" => "Key is missing"]);
+    if (empty($hwid) || empty($key)) {
+        echo json_encode(["status" => "error", "message" => "Missing data"]);
+        exit;
+    }
+    if (!isset($genKeys[$key]) || $genKeys[$key]['used']) {
+        echo json_encode(["status" => "error", "message" => "Invalid or used key"]);
         exit;
     }
 
-    // هل الكود موجود في قائمة الأكواد المولدة؟
-    if (!isset($genKeys[$key])) {
-        echo json_encode(["status" => "error", "message" => "Invalid License Key"]);
-        exit;
-    }
+    $days = $genKeys[$key]['days'];
+    $expiryTime = time() + ($days * 24 * 60 * 60);
 
-    // هل الكود تم استخدامه من قبل؟
-    if ($genKeys[$key]['used'] == true) {
-        echo json_encode(["status" => "error", "message" => "Key already used"]);
-        exit;
-    }
-
-    // التحقق هل الجهاز مسجل بكود آخر
-    foreach ($licenses as $savedHwid => $data) {
-        if ($data['key'] === $key && $savedHwid !== $hwid) {
-            echo json_encode(["status" => "error", "message" => "Key used on another device"]);
-            exit;
-        }
-    }
-
-    $durationDays = $genKeys[$key]['days'];
-    $expiryTime = time() + ($durationDays * 24 * 60 * 60);
-
-    // تحديث حالة الكود بأنه استخدم
     $genKeys[$key]['used'] = true;
+    $genKeys[$key]['hwid'] = $hwid;
     file_put_contents($keysFile, json_encode($genKeys, JSON_PRETTY_PRINT));
 
-    // حفظ ترخيص الجهاز
     $licenses[$hwid] = [
         "key" => $key,
-        "expiry" => $expiryTime
+        "expiry" => $expiryTime,
+        "banned" => false
     ];
     file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
 
-    echo json_encode(["status" => "success", "message" => "Activated successfully", "expiry" => $expiryTime]);
+    echo json_encode(["status" => "success", "expiry" => $expiryTime]);
     exit;
 }
 
-if ($action === 'check') {
-    if (!isset($licenses[$hwid])) {
-        echo json_encode(["status" => "unregistered", "message" => "Device not registered"]);
-        exit;
-    }
-
-    $clientData = $licenses[$hwid];
-    
-    if (time() > $clientData['expiry']) {
-        echo json_encode(["status" => "expired", "message" => "Subscription expired"]);
-        exit;
-    }
-
-    echo json_encode(["status" => "success", "message" => "Access Granted", "expiry" => $clientData['expiry']]);
+// 3. أوامر لوحة التحكم (Admin Panel Actions)
+if ($admin_secret !== $secretKey) {
+    echo json_encode(["status" => "error", "message" => "Unauthorized"]);
     exit;
+}
+
+if ($action === 'admin_generate') {
+    $days = intval($_GET['days'] ?? 30);
+    $newKey = "BDR-" . strtoupper(substr(md5(mt_rand()), 0, 4)) . "-" . strtoupper(substr(md5(mt_rand()), 0, 4)) . "-" . strtoupper(substr(md5(mt_rand()), 0, 4));
+    
+    $genKeys[$newKey] = [
+        "days" => $days,
+        "used" => false,
+        "hwid" => "",
+        "created_at" => date('Y-m-d H:i:s')
+    ];
+    file_put_contents($keysFile, json_encode($genKeys, JSON_PRETTY_PRINT));
+    echo json_encode(["status" => "success", "key" => $newKey]);
+    exit;
+}
+
+if ($action === 'admin_get_data') {
+    echo json_encode([
+        "status" => "success",
+        "keys" => $genKeys,
+        "licenses" => $licenses
+    ]);
+    exit;
+}
+
+if ($action === 'admin_ban') {
+    if (isset($licenses[$hwid])) {
+        $licenses[$hwid]['banned'] = !$licenses[$hwid]['banned'];
+        file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
+        echo json_encode(["status" => "success"]);
+        exit;
+    }
+}
+
+if ($action === 'admin_delete') {
+    if (isset($licenses[$hwid])) {
+        unset($licenses[$hwid]);
+        file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
+        echo json_encode(["status" => "success"]);
+        exit;
+    }
 }
