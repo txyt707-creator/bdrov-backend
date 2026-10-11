@@ -37,11 +37,21 @@ if ($action === 'generate') {
 }
 
 // ==========================================
-// 2. نظام عرض قائمة الأكواد (للوحة التحكم)
+// 2. نظام عرض قائمة الأكواد (نصي منظم ومضمون 100%)
 // ==========================================
 if ($action === 'list') {
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(["status" => "success", "licenses" => $licenses]);
+    $output = "STATUS:SUCCESS\n";
+    foreach ($licenses as $k => $data) {
+        $kKey = isset($data['key']) ? $data['key'] : $k;
+        $kDays = isset($data['days']) ? $data['days'] : 30;
+        $kStatus = isset($data['status']) ? $data['status'] : 'available';
+        $kName = isset($data['name']) ? $data['name'] : '-';
+        $kCreated = isset($data['created_at']) ? $data['created_at'] : '-';
+        
+        $output .= "$kKey|$kDays|$kStatus|$kName|$kCreated\n";
+    }
+    header('Content-Type: text/plain; charset=utf-8');
+    echo $output;
     exit;
 }
 
