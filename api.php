@@ -1,30 +1,27 @@
 <?php
-// إعدادات قاعدة البيانات (قم بتغييرها بما يناسب استضافتك أو قاعدتك)
-// ملاحظة: يمكنك تعديلها حسب نظام التخزين لديك (SQLite, MySQL, JSON file)
-
 $action = isset($_GET['action']) ? $_GET['action'] : '';
 $hwid = isset($_GET['hwid']) ? preg_replace('/[^a-zA-Z0-9]/', '', $_GET['hwid']) : '';
 $key = isset($_GET['key']) ? trim($_GET['key']) : '';
 $name = isset($_GET['name']) ? trim($_GET['name']) : '';
 
+$dbFile = 'licenses.json';
+$licenses = file_exists($dbFile) ? json_decode(file_get_contents($dbFile), true) : [];
+
 // ==========================================
-// 1. نظام إرسال الإعدادات السحابية والتحديثات (Cloud Config)
+// 1. نظام إرسال الإعدادات السحابية (Cloud Config)
 // ==========================================
 if ($action === 'config') {
     $configData = [
         "status" => "success",
-        // الوزنيات الافتراضية المثالية التي اعتمدناها
         "default_pull" => 114,
         "default_smooth" => 143,
         "default_fov" => 245,
         "default_vert" => -53,
         "default_horz" => -39,
-        
-        // التحكم في الميزات عن بعد (حالة التفعيل والرسالة مثل "قريباً !")
         "features" => [
             "combo" => [
-                "enabled" => false,        // اجعلها true لتفعيلها، أو false لإلغائها وإظهار رسالة "قريباً !"
-                "message" => "قريباً !"     // النص الذي سيظهر للمشتركين عند التعطيل
+                "enabled" => false,
+                "message" => "قريباً !"
             ],
             "ultra_sticky" => [
                 "enabled" => true,
@@ -38,7 +35,37 @@ if ($action === 'config') {
 }
 
 // ==========================================
-// 2. نظام التحقق من الترخيص (Check License)
+// 2. نظام توليد الأكواد (للوحة التحكم Admin Panel)
+// ==========================================
+if ($action === 'generate') {
+    $days = isset($_GET['days']) ? intval($_GET['days']) : 30;
+    $prefix = isset($_GET['prefix']) ? $_GET['prefix'] : 'BDR';
+    
+    // توليد كود عشوائي فريد
+    $newKey = $prefix . '-' . strtoupper(substr(md5(mt_rand()), 0, 4) . '-' . substr(md5(mt_rand()), 0, 4) . '-' . substr(md5(mt_rand()), 0, 4));
+    
+    // حفظ الكود في قاعدة البيانات كحالة "متاح" (غير مفعل بعد)
+    $licenses[$newKey] = [
+        "key" => $newKey,
+        "days" => $days,
+        "status" => "available",
+        "name" => "-",
+        "hwid" => "",
+        "expiry" => 0,
+        "created_at" => date('Y-m-d H:i:s')
+    ];
+    
+    file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
+    
+    echo json_encode([
+        "status" => "success",
+        "key" => $newKey
+    ]);
+    exit;
+}
+
+// ==========================================
+// 3. نظام التحقق من الترخيص (Check License)
 // ==========================================
 if ($action === 'check') {
     if (empty($hwid)) {
@@ -46,23 +73,16 @@ if ($action === 'check') {
         exit;
     }
 
-    // [ملاحظة]: هنا يتم التحقق من قاعدة البيانات الخاصة بك إذا كان الـ HWID مفعل مسبقاً
-    // هذا مثال افتراضي يعتمد على ملف JSON أو قاعدة بيانات
-    $dbFile = 'licenses.json';
-    $licenses = file_exists($dbFile) ? json_decode(file_get_contents($dbFile), true) : [];
-
-    if (isset($licenses[$hwid])) {
-        $expiryTime = $licenses[$hwid]['expiry'];
-        $userName = $licenses[$hwid]['name'];
-        
-        // التحقق إن لم ينتهِ الاشتراك
-        if (time() < $expiryTime) {
-            echo json_encode([
-                "status" => "success",
-                "name" => $userName,
-                "expiry" => $expiryTime
-            ]);
-            exit;
+    foreach ($licenses as $k => $data) {
+        if (isset($data['hwid']) && $data['hwid'] === $hwid) {
+            if (time() < $data['expiry']) {
+                echo json_encode([
+                    "status" => "success",
+                    "name" => $data['name'],
+                    "expiry" => $data['expiry']
+                ]);
+                exit;
+            }
         }
     }
 
@@ -71,7 +91,7 @@ if ($action === 'check') {
 }
 
 // ==========================================
-// 3. نظام تفعيل الاشتراك بالكود (Activate License)
+// 4. نظام تفعيل الاشتراك بالكود (Activate License)
 // ==========================================
 if ($action === 'activate') {
     if (empty($hwid) || empty($key) || empty($name)) {
@@ -79,26 +99,22 @@ if ($action === 'activate') {
         exit;
     }
 
-    // [ملاحظة]: هنا تضيف الأكواد الصحيحة المعتمدة لديك أو تتحقق منها
-    // مثال لأكواد التفعيل (يمكنك ربطها بقاعدة بيانات حقيقية)
-    $validKeys = [
-        "BDR-OV-VIP-2026" => 30, // الكود يمنح 30 يوم مثلاً
-        "BDR-PRO-9999"    => 365 // الكود يمنح سنة
-    ];
+    if (isset($licenses[$key])) {
+        // التحقق إن كان الكود مستخدم من قبل
+        if (isset($licenses[$key]['status']) && $licenses[$key]['status'] === 'active') {
+            echo json_encode(["status" => "error", "message" => "Key already used"]);
+            exit;
+        }
 
-    if (isset($validKeys[$key])) {
-        $days = $validKeys[$key];
+        $days = isset($licenses[$key]['days']) ? $licenses[$key]['days'] : 30;
         $expiryTime = time() + ($days * 86400);
 
-        $dbFile = 'licenses.json';
-        $licenses = file_exists($dbFile) ? json_decode(file_get_contents($dbFile), true) : [];
+        // تحديث بيانات الكود بربطه بالمشترك والـ HWID
+        $licenses[$key]['name'] = $name;
+        $licenses[$key]['hwid'] = $hwid;
+        $licenses[$key]['expiry'] = $expiryTime;
+        $licenses[$key]['status'] = 'active';
 
-        // حفظ ارتباط الـ HWID بالمشترك وتاريخ الانتهاء
-        $licenses[$hwid] = [
-            "name" => $name,
-            "expiry" => $expiryTime,
-            "key" => $key
-        ];
         file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
 
         echo json_encode([
@@ -109,10 +125,9 @@ if ($action === 'activate') {
         exit;
     }
 
-    echo json_encode(["status" => "error", "message" => "Invalid or used license key"]);
+    echo json_encode(["status" => "error", "message" => "Invalid license key"]);
     exit;
 }
 
-// لو تم فتح الملف بدون أي Action صحيح
 echo json_encode(["status" => "error", "message" => "Invalid action"]);
-?>
+v?>
