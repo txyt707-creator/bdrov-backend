@@ -10,11 +10,12 @@ $genKeys = file_exists($keysFile) ? json_decode(file_get_contents($keysFile), tr
 $action = $_GET['action'] ?? '';
 $hwid = $_GET['hwid'] ?? '';
 $key = $_GET['key'] ?? '';
+$name = $_GET['name'] ?? 'مستخدم بدون اسم';
 $admin_secret = $_GET['secret'] ?? '';
 
 $secretKey = "BDrAdmin123Secure";
 
-// فحص واستمرار الاتصال من العميل (Heartbeat)
+// فحص الاتصال (Heartbeat)
 if ($action === 'check') {
     if (empty($hwid) || !isset($licenses[$hwid])) {
         echo json_encode(["status" => "unregistered"]);
@@ -29,7 +30,6 @@ if ($action === 'check') {
         exit;
     }
 
-    // تحديث وقت آخر اتصال بالثانية
     $licenses[$hwid]['last_ping'] = time();
     file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
 
@@ -37,7 +37,7 @@ if ($action === 'check') {
     exit;
 }
 
-// تفعيل كود
+// تفعيل الكود مع اسم المشترك
 if ($action === 'activate') {
     if (empty($hwid) || empty($key)) {
         echo json_encode(["status" => "error", "message" => "Missing data"]);
@@ -53,10 +53,12 @@ if ($action === 'activate') {
 
     $genKeys[$key]['used'] = true;
     $genKeys[$key]['hwid'] = $hwid;
+    $genKeys[$key]['name'] = $name;
     file_put_contents($keysFile, json_encode($genKeys, JSON_PRETTY_PRINT));
 
     $licenses[$hwid] = [
         "key" => $key,
+        "name" => $name,
         "expiry" => $expiryTime,
         "banned" => false,
         "last_ping" => time()
@@ -82,6 +84,7 @@ if ($action === 'admin_generate') {
         "days" => $days,
         "used" => false,
         "hwid" => "",
+        "name" => "",
         "created_at" => date('Y-m-d H:i:s')
     ];
     file_put_contents($keysFile, json_encode($genKeys, JSON_PRETTY_PRINT));
@@ -90,24 +93,35 @@ if ($action === 'admin_generate') {
 }
 
 if ($action === 'admin_get_data') {
-    // حساب حالة الاتصال (إذا اتصل خلال آخر دقيقتين يكون أونلاين)
-    $now = time();
-    $formattedLicenses = [];
-    foreach ($licenses as $h => $data) {
-        $lastPing = $data['last_ping'] ?? 0;
-        $isOnline = ($now - $lastPing) < 120; // 2 Minutes threshold
-        $formattedLicenses[$h] = [
-            "key" => $data['key'],
-            "expiry" => date('Y-m-d H:i', $data['expiry']),
-            "online" => $isOnline,
-            "banned" => $data['banned'] ?? false
-        ];
-    }
-
     echo json_encode([
         "status" => "success",
         "keys" => $genKeys,
-        "licenses" => $formattedLicenses
+        "licenses" => $licenses
     ]);
+    exit;
+}
+
+// حذف الكود / إعطاء باند نهائي
+if ($action === 'admin_delete') {
+    $targetKey = $_GET['target_key'] ?? '';
+    
+    // البحث في الأكواد وحذفها أو إلغاء تفعيلها
+    foreach ($genKeys as $k => $data) {
+        if ($k === $targetKey) {
+            $matchedHwid = $data['hwid'] ?? '';
+            // حذف الكود من الأكواد المولدة
+            unset($genKeys[$k]);
+            file_put_contents($keysFile, json_encode($genKeys, JSON_PRETTY_PRINT));
+            
+            // إذا كان مفعل على جهاز، احذفه من التراخيص (باند نهائي)
+            if ($matchedHwid && isset($licenses[$matchedHwid])) {
+                unset($licenses[$matchedHwid]);
+                file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
+            }
+            echo json_encode(["status" => "success"]);
+            exit;
+        }
+    }
+    echo json_encode(["status" => "error", "message" => "Key not found"]);
     exit;
 }
