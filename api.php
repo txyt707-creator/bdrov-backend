@@ -49,7 +49,6 @@ if ($action === 'admin_get_data') {
         exit;
     }
     
-    // بناء استجابة JSON تتطابق بدقة مع ما تنتظره لوحة الأدمن الخاصة بك
     $response = ["status" => "success"];
     foreach ($licenses as $k => $data) {
         $response[$k] = [
@@ -61,7 +60,8 @@ if ($action === 'admin_get_data') {
     }
     
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode($response, JSON_PRETTY_PRINT);
+    // أزلنا JSON_PRETTY_PRINT ليكون الـ JSON في سطر واحد لا يكسر البحث أبداً
+    echo json_encode($response);
     exit;
 }
 
