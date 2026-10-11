@@ -1,127 +1,118 @@
 <?php
-header('Content-Type: application/json');
+// إعدادات قاعدة البيانات (قم بتغييرها بما يناسب استضافتك أو قاعدتك)
+// ملاحظة: يمكنك تعديلها حسب نظام التخزين لديك (SQLite, MySQL, JSON file)
 
-$dbFile = 'licenses.json';
-$keysFile = 'generated_keys.json';
+$action = isset($_GET['action']) ? $_GET['action'] : '';
+$hwid = isset($_GET['hwid']) ? preg_replace('/[^a-zA-Z0-9]/', '', $_GET['hwid']) : '';
+$key = isset($_GET['key']) ? trim($_GET['key']) : '';
+$name = isset($_GET['name']) ? trim($_GET['name']) : '';
 
-$licenses = file_exists($dbFile) ? json_decode(file_get_contents($dbFile), true) : [];
-$genKeys = file_exists($keysFile) ? json_decode(file_get_contents($keysFile), true) : [];
-
-$action = $_GET['action'] ?? '';
-$hwid = $_GET['hwid'] ?? '';
-$key = $_GET['key'] ?? '';
-$name = $_GET['name'] ?? 'مستخدم بدون اسم';
-$admin_secret = $_GET['secret'] ?? '';
-
-$secretKey = "BDrAdmin123Secure";
-
-// فحص الاتصال (Heartbeat)
-if ($action === 'check') {
-    if (empty($hwid) || !isset($licenses[$hwid])) {
-        echo json_encode(["status" => "unregistered"]);
-        exit;
-    }
-    if ($licenses[$hwid]['banned'] ?? false) {
-        echo json_encode(["status" => "banned"]);
-        exit;
-    }
-    if (time() > $licenses[$hwid]['expiry']) {
-        echo json_encode(["status" => "expired"]);
-        exit;
-    }
-
-    $licenses[$hwid]['last_ping'] = time();
-    file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
-
-    echo json_encode(["status" => "success", "expiry" => $licenses[$hwid]['expiry']]);
-    exit;
-}
-
-// تفعيل الكود مع اسم المشترك
-if ($action === 'activate') {
-    if (empty($hwid) || empty($key)) {
-        echo json_encode(["status" => "error", "message" => "Missing data"]);
-        exit;
-    }
-    if (!isset($genKeys[$key]) || $genKeys[$key]['used']) {
-        echo json_encode(["status" => "error", "message" => "Invalid or used key"]);
-        exit;
-    }
-
-    $days = $genKeys[$key]['days'];
-    $expiryTime = time() + ($days * 24 * 60 * 60);
-
-    $genKeys[$key]['used'] = true;
-    $genKeys[$key]['hwid'] = $hwid;
-    $genKeys[$key]['name'] = $name;
-    file_put_contents($keysFile, json_encode($genKeys, JSON_PRETTY_PRINT));
-
-    $licenses[$hwid] = [
-        "key" => $key,
-        "name" => $name,
-        "expiry" => $expiryTime,
-        "banned" => false,
-        "last_ping" => time()
-    ];
-    file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
-
-    echo json_encode(["status" => "success", "expiry" => $expiryTime]);
-    exit;
-}
-
-// أوامر لوحة الأدمن
-if ($admin_secret !== $secretKey) {
-    echo json_encode(["status" => "error", "message" => "Unauthorized"]);
-    exit;
-}
-
-if ($action === 'admin_generate') {
-    $days = intval($_GET['days'] ?? 30);
-    $prefix = $_GET['prefix'] ?? 'BDR';
-    $newKey = strtoupper($prefix) . "-" . strtoupper(substr(md5(mt_rand()), 0, 4)) . "-" . strtoupper(substr(md5(mt_rand()), 0, 4)) . "-" . strtoupper(substr(md5(mt_rand()), 0, 4));
-    
-    $genKeys[$newKey] = [
-        "days" => $days,
-        "used" => false,
-        "hwid" => "",
-        "name" => "",
-        "created_at" => date('Y-m-d H:i:s')
-    ];
-    file_put_contents($keysFile, json_encode($genKeys, JSON_PRETTY_PRINT));
-    echo json_encode(["status" => "success", "key" => $newKey]);
-    exit;
-}
-
-if ($action === 'admin_get_data') {
-    echo json_encode([
+// ==========================================
+// 1. نظام إرسال الإعدادات السحابية والتحديثات (Cloud Config)
+// ==========================================
+if ($action === 'config') {
+    $configData = [
         "status" => "success",
-        "keys" => $genKeys,
-        "licenses" => $licenses
-    ]);
+        // الوزنيات الافتراضية المثالية التي اعتمدناها
+        "default_pull" => 114,
+        "default_smooth" => 143,
+        "default_fov" => 245,
+        "default_vert" => -53,
+        "default_horz" => -39,
+        
+        // التحكم في الميزات عن بعد (حالة التفعيل والرسالة مثل "قريباً !")
+        "features" => [
+            "combo" => [
+                "enabled" => false,        // اجعلها true لتفعيلها، أو false لإلغائها وإظهار رسالة "قريباً !"
+                "message" => "قريباً !"     // النص الذي سيظهر للمشتركين عند التعطيل
+            ],
+            "ultra_sticky" => [
+                "enabled" => true,
+                "message" => "قريباً !"
+            ]
+        ]
+    ];
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($configData);
     exit;
 }
 
-// حذف الكود / إعطاء باند نهائي
-if ($action === 'admin_delete') {
-    $targetKey = $_GET['target_key'] ?? '';
-    
-    // البحث في الأكواد وحذفها أو إلغاء تفعيلها
-    foreach ($genKeys as $k => $data) {
-        if ($k === $targetKey) {
-            $matchedHwid = $data['hwid'] ?? '';
-            // حذف الكود من الأكواد المولدة
-            unset($genKeys[$k]);
-            file_put_contents($keysFile, json_encode($genKeys, JSON_PRETTY_PRINT));
-            
-            // إذا كان مفعل على جهاز، احذفه من التراخيص (باند نهائي)
-            if ($matchedHwid && isset($licenses[$matchedHwid])) {
-                unset($licenses[$matchedHwid]);
-                file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
-            }
-            echo json_encode(["status" => "success"]);
+// ==========================================
+// 2. نظام التحقق من الترخيص (Check License)
+// ==========================================
+if ($action === 'check') {
+    if (empty($hwid)) {
+        echo json_encode(["status" => "error", "message" => "Invalid HWID"]);
+        exit;
+    }
+
+    // [ملاحظة]: هنا يتم التحقق من قاعدة البيانات الخاصة بك إذا كان الـ HWID مفعل مسبقاً
+    // هذا مثال افتراضي يعتمد على ملف JSON أو قاعدة بيانات
+    $dbFile = 'licenses.json';
+    $licenses = file_exists($dbFile) ? json_decode(file_get_contents($dbFile), true) : [];
+
+    if (isset($licenses[$hwid])) {
+        $expiryTime = $licenses[$hwid]['expiry'];
+        $userName = $licenses[$hwid]['name'];
+        
+        // التحقق إن لم ينتهِ الاشتراك
+        if (time() < $expiryTime) {
+            echo json_encode([
+                "status" => "success",
+                "name" => $userName,
+                "expiry" => $expiryTime
+            ]);
             exit;
         }
     }
-    echo json_encode(["status" => "error", "message" => "Key not found"]);
+
+    echo json_encode(["status" => "failed", "message" => "License not found or expired"]);
     exit;
 }
+
+// ==========================================
+// 3. نظام تفعيل الاشتراك بالكود (Activate License)
+// ==========================================
+if ($action === 'activate') {
+    if (empty($hwid) || empty($key) || empty($name)) {
+        echo json_encode(["status" => "error", "message" => "Missing parameters"]);
+        exit;
+    }
+
+    // [ملاحظة]: هنا تضيف الأكواد الصحيحة المعتمدة لديك أو تتحقق منها
+    // مثال لأكواد التفعيل (يمكنك ربطها بقاعدة بيانات حقيقية)
+    $validKeys = [
+        "BDR-OV-VIP-2026" => 30, // الكود يمنح 30 يوم مثلاً
+        "BDR-PRO-9999"    => 365 // الكود يمنح سنة
+    ];
+
+    if (isset($validKeys[$key])) {
+        $days = $validKeys[$key];
+        $expiryTime = time() + ($days * 86400);
+
+        $dbFile = 'licenses.json';
+        $licenses = file_exists($dbFile) ? json_decode(file_get_contents($dbFile), true) : [];
+
+        // حفظ ارتباط الـ HWID بالمشترك وتاريخ الانتهاء
+        $licenses[$hwid] = [
+            "name" => $name,
+            "expiry" => $expiryTime,
+            "key" => $key
+        ];
+        file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
+
+        echo json_encode([
+            "status" => "success",
+            "name" => $name,
+            "expiry" => $expiryTime
+        ]);
+        exit;
+    }
+
+    echo json_encode(["status" => "error", "message" => "Invalid or used license key"]);
+    exit;
+}
+
+// لو تم فتح الملف بدون أي Action صحيح
+echo json_encode(["status" => "error", "message" => "Invalid action"]);
+?>
