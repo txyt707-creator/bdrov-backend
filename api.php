@@ -12,28 +12,32 @@ $hwid = $_GET['hwid'] ?? '';
 $key = $_GET['key'] ?? '';
 $admin_secret = $_GET['secret'] ?? '';
 
-// مفتاح حماية سري بسيط بين أداة الـ Admin والـ Server (غيره لأي كلمة سر قوية)
 $secretKey = "BDrAdmin123Secure";
 
-// 1. التحقق للعميل العادي
+// فحص واستمرار الاتصال من العميل (Heartbeat)
 if ($action === 'check') {
     if (empty($hwid) || !isset($licenses[$hwid])) {
         echo json_encode(["status" => "unregistered"]);
         exit;
     }
     if ($licenses[$hwid]['banned'] ?? false) {
-        echo json_encode(["status" => "banned", "message" => "Device is banned"]);
+        echo json_encode(["status" => "banned"]);
         exit;
     }
     if (time() > $licenses[$hwid]['expiry']) {
         echo json_encode(["status" => "expired"]);
         exit;
     }
+
+    // تحديث وقت آخر اتصال بالثانية
+    $licenses[$hwid]['last_ping'] = time();
+    file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
+
     echo json_encode(["status" => "success", "expiry" => $licenses[$hwid]['expiry']]);
     exit;
 }
 
-// 2. تفعيل كود للعميل
+// تفعيل كود
 if ($action === 'activate') {
     if (empty($hwid) || empty($key)) {
         echo json_encode(["status" => "error", "message" => "Missing data"]);
@@ -54,7 +58,8 @@ if ($action === 'activate') {
     $licenses[$hwid] = [
         "key" => $key,
         "expiry" => $expiryTime,
-        "banned" => false
+        "banned" => false,
+        "last_ping" => time()
     ];
     file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
 
@@ -62,7 +67,7 @@ if ($action === 'activate') {
     exit;
 }
 
-// 3. أوامر لوحة التحكم (Admin Panel Actions)
+// أوامر لوحة الأدمن
 if ($admin_secret !== $secretKey) {
     echo json_encode(["status" => "error", "message" => "Unauthorized"]);
     exit;
@@ -70,7 +75,8 @@ if ($admin_secret !== $secretKey) {
 
 if ($action === 'admin_generate') {
     $days = intval($_GET['days'] ?? 30);
-    $newKey = "BDR-" . strtoupper(substr(md5(mt_rand()), 0, 4)) . "-" . strtoupper(substr(md5(mt_rand()), 0, 4)) . "-" . strtoupper(substr(md5(mt_rand()), 0, 4));
+    $prefix = $_GET['prefix'] ?? 'BDR';
+    $newKey = strtoupper($prefix) . "-" . strtoupper(substr(md5(mt_rand()), 0, 4)) . "-" . strtoupper(substr(md5(mt_rand()), 0, 4)) . "-" . strtoupper(substr(md5(mt_rand()), 0, 4));
     
     $genKeys[$newKey] = [
         "days" => $days,
@@ -84,28 +90,24 @@ if ($action === 'admin_generate') {
 }
 
 if ($action === 'admin_get_data') {
+    // حساب حالة الاتصال (إذا اتصل خلال آخر دقيقتين يكون أونلاين)
+    $now = time();
+    $formattedLicenses = [];
+    foreach ($licenses as $h => $data) {
+        $lastPing = $data['last_ping'] ?? 0;
+        $isOnline = ($now - $lastPing) < 120; // 2 Minutes threshold
+        $formattedLicenses[$h] = [
+            "key" => $data['key'],
+            "expiry" => date('Y-m-d H:i', $data['expiry']),
+            "online" => $isOnline,
+            "banned" => $data['banned'] ?? false
+        ];
+    }
+
     echo json_encode([
         "status" => "success",
         "keys" => $genKeys,
-        "licenses" => $licenses
+        "licenses" => $formattedLicenses
     ]);
     exit;
-}
-
-if ($action === 'admin_ban') {
-    if (isset($licenses[$hwid])) {
-        $licenses[$hwid]['banned'] = !$licenses[$hwid]['banned'];
-        file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
-        echo json_encode(["status" => "success"]);
-        exit;
-    }
-}
-
-if ($action === 'admin_delete') {
-    if (isset($licenses[$hwid])) {
-        unset($licenses[$hwid]);
-        file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
-        echo json_encode(["status" => "success"]);
-        exit;
-    }
 }
