@@ -5,44 +5,13 @@ $key = isset($_GET['key']) ? trim($_GET['key']) : '';
 $name = isset($_GET['name']) ? trim($_GET['name']) : '';
 
 $dbFile = 'licenses.json';
-$licenses = [];
-if (file_exists($dbFile)) {
-    $jsonContent = file_get_contents($dbFile);
-    $decoded = json_decode($jsonContent, true);
-    if (is_array($decoded)) {
-        $licenses = $decoded;
-    }
+$licenses = file_exists($dbFile) ? json_decode(file_get_contents($dbFile), true) : [];
+if (!is_array($licenses)) {
+    $licenses = [];
 }
 
 // ==========================================
-// 1. نظام إرسال الإعدادات السحابية (Cloud Config)
-// ==========================================
-if ($action === 'config') {
-    $configData = [
-        "status" => "success",
-        "default_pull" => 114,
-        "default_smooth" => 143,
-        "default_fov" => 245,
-        "default_vert" => -53,
-        "default_horz" => -39,
-        "features" => [
-            "combo" => [
-                "enabled" => false,
-                "message" => "قريباً !"
-            ],
-            "ultra_sticky" => [
-                "enabled" => true,
-                "message" => "قريباً !"
-            ]
-        ]
-    ];
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode($configData);
-    exit;
-}
-
-// ==========================================
-// 2. نظام توليد الأكواد (Admin Panel)
+// 1. نظام توليد الأكواد (Admin Panel)
 // ==========================================
 if ($action === 'generate') {
     $days = isset($_GET['days']) ? intval($_GET['days']) : 30;
@@ -68,26 +37,16 @@ if ($action === 'generate') {
 }
 
 // ==========================================
-// 3. نظام عرض قائمة الأكواد (نص منظم ومضمون 100%)
+// 2. نظام عرض قائمة الأكواد (للوحة التحكم)
 // ==========================================
 if ($action === 'list') {
-    $output = "STATUS:SUCCESS\n";
-    foreach ($licenses as $k => $data) {
-        $kKey = isset($data['key']) ? $data['key'] : $k;
-        $kDays = isset($data['days']) ? $data['days'] : 30;
-        $kStatus = isset($data['status']) ? $data['status'] : 'available';
-        $kName = isset($data['name']) ? $data['name'] : '-';
-        $kCreated = isset($data['created_at']) ? $data['created_at'] : '-';
-        
-        $output .= "$kKey|$kDays|$kStatus|$kName|$kCreated\n";
-    }
-    header('Content-Type: text/plain; charset=utf-8');
-    echo $output;
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(["status" => "success", "licenses" => $licenses]);
     exit;
 }
 
 // ==========================================
-// 4. نظام التحقق من الترخيص
+// 3. نظام التحقق من الترخيص (للسكربت الأساسي)
 // ==========================================
 if ($action === 'check') {
     if (empty($hwid)) {
@@ -116,7 +75,7 @@ if ($action === 'check') {
 }
 
 // ==========================================
-// 5. نظام تفعيل الاشتراك بالكود
+// 4. نظام تفعيل الاشتراك بالكود (للسكربت الأساسي)
 // ==========================================
 if ($action === 'activate') {
     if (empty($hwid) || empty($key) || empty($name)) {
