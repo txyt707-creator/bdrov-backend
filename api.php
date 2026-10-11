@@ -6,6 +6,9 @@ $name = isset($_GET['name']) ? trim($_GET['name']) : '';
 
 $dbFile = 'licenses.json';
 $licenses = file_exists($dbFile) ? json_decode(file_get_contents($dbFile), true) : [];
+if (!is_array($licenses)) {
+    $licenses = [];
+}
 
 // ==========================================
 // 1. نظام إرسال الإعدادات السحابية (Cloud Config)
@@ -35,7 +38,7 @@ if ($action === 'config') {
 }
 
 // ==========================================
-// 2. نظام توليد الأكواد (للوحة التحكم Admin Panel)
+// 2. نظام توليد الأكواد (Admin Panel)
 // ==========================================
 if ($action === 'generate') {
     $days = isset($_GET['days']) ? intval($_GET['days']) : 30;
@@ -61,26 +64,26 @@ if ($action === 'generate') {
 }
 
 // ==========================================
-// 3. نظام عرض قائمة الأكواد (مبسط وسريع للأدمن)
+// 3. نظام عرض قائمة الأكواد (JSON موحد ومضمون)
 // ==========================================
 if ($action === 'list') {
-    $output = "status:success\n";
+    $listArray = [];
     foreach ($licenses as $k => $data) {
-        $kKey = isset($data['key']) ? $data['key'] : $k;
-        $kDays = isset($data['days']) ? $data['days'] : 30;
-        $kStatus = isset($data['status']) ? $data['status'] : 'available';
-        $kName = isset($data['name']) ? $data['name'] : '-';
-        $kCreated = isset($data['created_at']) ? $data['created_at'] : '-';
-        
-        $output .= "$kKey|$kDays|$kStatus|$kName|$kCreated\n";
+        $listArray[] = [
+            "key" => isset($data['key']) ? $data['key'] : $k,
+            "days" => isset($data['days']) ? $data['days'] : 30,
+            "status" => isset($data['status']) ? $data['status'] : 'available',
+            "name" => isset($data['name']) ? $data['name'] : '-',
+            "created_at" => isset($data['created_at']) ? $data['created_at'] : '-'
+        ];
     }
-    header('Content-Type: text/plain; charset=utf-8');
-    echo $output;
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(["status" => "success", "licenses" => $listArray]);
     exit;
 }
 
 // ==========================================
-// 4. نظام التحقق من الترخيص (Check License)
+// 4. نظام التحقق من الترخيص
 // ==========================================
 if ($action === 'check') {
     if (empty($hwid)) {
@@ -109,7 +112,7 @@ if ($action === 'check') {
 }
 
 // ==========================================
-// 5. نظام تفعيل الاشتراك بالكود (Activate License)
+// 5. نظام تفعيل الاشتراك بالكود
 // ==========================================
 if ($action === 'activate') {
     if (empty($hwid) || empty($key) || empty($name)) {
