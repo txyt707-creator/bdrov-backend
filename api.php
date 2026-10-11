@@ -60,7 +60,6 @@ if ($action === 'admin_get_data') {
     }
     
     header('Content-Type: application/json; charset=utf-8');
-    // أزلنا JSON_PRETTY_PRINT ليكون الـ JSON في سطر واحد لا يكسر البحث أبداً
     echo json_encode($response);
     exit;
 }
@@ -170,7 +169,7 @@ if ($action === 'activate') {
         $expiryTime = time() + ($days * 86400);
 
         $licenses[$key]['name'] = $name;
-        $licenses[$key]['hwid'] = $hwid;
+        $licenses[$key]['hwid'] = $hwid; // حفظ بصمة الجهاز هنا بسلام
         $licenses[$key]['expiry'] = $expiryTime;
         $licenses[$key]['used'] = true;
 
