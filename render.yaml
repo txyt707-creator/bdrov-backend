@@ -1,7 +1,7 @@
 services:
   - type: web
     name: bdrov-api
-    env: php
+    env: docker
     plan: free
     buildCommand: ""
     startCommand: ""
