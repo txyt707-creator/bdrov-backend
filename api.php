@@ -20,8 +20,8 @@ if ($action === 'config') {
         "default_horz" => -39,
         "features" => [
             "combo" => [
-                "enabled" => false,
-                "message" => "قريباً !"
+                "enabled" => false,        // اجعلها true لتفعيل الميزة، أو false لإلغائها وإظهار رسالة "قريباً !"
+                "message" => "قريباً !"     // النص الذي سيظهر تلقائياً للمشتركين عند التعطيل
             ],
             "ultra_sticky" => [
                 "enabled" => true,
@@ -41,10 +41,8 @@ if ($action === 'generate') {
     $days = isset($_GET['days']) ? intval($_GET['days']) : 30;
     $prefix = isset($_GET['prefix']) ? $_GET['prefix'] : 'BDR';
     
-    // توليد كود عشوائي فريد
     $newKey = $prefix . '-' . strtoupper(substr(md5(mt_rand()), 0, 4) . '-' . substr(md5(mt_rand()), 0, 4) . '-' . substr(md5(mt_rand()), 0, 4));
     
-    // حفظ الكود في قاعدة البيانات كحالة "متاح" (غير مفعل بعد)
     $licenses[$newKey] = [
         "key" => $newKey,
         "days" => $days,
@@ -57,18 +55,26 @@ if ($action === 'generate') {
     
     file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
     
-    echo json_encode([
-        "status" => "success",
-        "key" => $newKey
-    ]);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(["status" => "success", "key" => $newKey]);
     exit;
 }
 
 // ==========================================
-// 3. نظام التحقق من الترخيص (Check License)
+// 3. نظام عرض قائمة الأكواد (للوحة التحكم)
+// ==========================================
+if ($action === 'list') {
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(["status" => "success", "licenses" => $licenses]);
+    exit;
+}
+
+// ==========================================
+// 4. نظام التحقق من الترخيص (Check License)
 // ==========================================
 if ($action === 'check') {
     if (empty($hwid)) {
+        header('Content-Type: application/json; charset=utf-8');
         echo json_encode(["status" => "error", "message" => "Invalid HWID"]);
         exit;
     }
@@ -76,6 +82,7 @@ if ($action === 'check') {
     foreach ($licenses as $k => $data) {
         if (isset($data['hwid']) && $data['hwid'] === $hwid) {
             if (time() < $data['expiry']) {
+                header('Content-Type: application/json; charset=utf-8');
                 echo json_encode([
                     "status" => "success",
                     "name" => $data['name'],
@@ -86,22 +93,24 @@ if ($action === 'check') {
         }
     }
 
+    header('Content-Type: application/json; charset=utf-8');
     echo json_encode(["status" => "failed", "message" => "License not found or expired"]);
     exit;
 }
 
 // ==========================================
-// 4. نظام تفعيل الاشتراك بالكود (Activate License)
+// 5. نظام تفعيل الاشتراك بالكود (Activate License)
 // ==========================================
 if ($action === 'activate') {
     if (empty($hwid) || empty($key) || empty($name)) {
+        header('Content-Type: application/json; charset=utf-8');
         echo json_encode(["status" => "error", "message" => "Missing parameters"]);
         exit;
     }
 
     if (isset($licenses[$key])) {
-        // التحقق إن كان الكود مستخدم من قبل
         if (isset($licenses[$key]['status']) && $licenses[$key]['status'] === 'active') {
+            header('Content-Type: application/json; charset=utf-8');
             echo json_encode(["status" => "error", "message" => "Key already used"]);
             exit;
         }
@@ -109,7 +118,6 @@ if ($action === 'activate') {
         $days = isset($licenses[$key]['days']) ? $licenses[$key]['days'] : 30;
         $expiryTime = time() + ($days * 86400);
 
-        // تحديث بيانات الكود بربطه بالمشترك والـ HWID
         $licenses[$key]['name'] = $name;
         $licenses[$key]['hwid'] = $hwid;
         $licenses[$key]['expiry'] = $expiryTime;
@@ -117,6 +125,7 @@ if ($action === 'activate') {
 
         file_put_contents($dbFile, json_encode($licenses, JSON_PRETTY_PRINT));
 
+        header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
             "status" => "success",
             "name" => $name,
@@ -125,9 +134,11 @@ if ($action === 'activate') {
         exit;
     }
 
+    header('Content-Type: application/json; charset=utf-8');
     echo json_encode(["status" => "error", "message" => "Invalid license key"]);
     exit;
 }
 
+header('Content-Type: application/json; charset=utf-8');
 echo json_encode(["status" => "error", "message" => "Invalid action"]);
-v?>
+?>
